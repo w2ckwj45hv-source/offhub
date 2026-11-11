@@ -1,0 +1,12 @@
+{
+  "name": "offhub",
+  "version": "0.1.0",
+  "description": "Archive a GitHub repository's issues, pull requests and discussions as a searchable offline website.",
+  "type": "module",
+  "bin": { "offhub": "bin/offhub.js" },
+  "files": ["bin", "src"],
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test" },
+  "keywords": ["github", "backup", "archive", "issues", "pull-requests", "discussions", "offline"],
+  "license": "MIT"
+}

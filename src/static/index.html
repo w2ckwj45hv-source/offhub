@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offline archive</title><link rel="stylesheet" href="style.css"></head><body>
+<h1 id="repo">Offline archive</h1>
+<p class="facts" id="gen"></p>
+<form class="filters" onsubmit="return false">
+  <input id="q" type="search" placeholder="Search title, number, author, label" aria-label="Search" autofocus>
+  <select id="kind" aria-label="Kind">
+    <option value="">All kinds</option><option value="issues">Issues</option>
+    <option value="pulls">Pull requests</option><option value="discussions">Discussions</option>
+  </select>
+  <select id="state" aria-label="State">
+    <option value="">Any state</option><option value="open">Open</option><option value="closed">Closed or merged</option>
+  </select>
+  <label><input id="full" type="checkbox"> Search inside text</label>
+</form>
+<p class="facts" id="count" aria-live="polite"></p>
+<ul id="list"></ul>
+<noscript><p class="note">The list needs JavaScript. The pages themselves are plain HTML in the issues, pulls and discussions folders.</p></noscript>
+<script src="index-data.js"></script>
+<script src="viewer.js"></script>
+</body></html>

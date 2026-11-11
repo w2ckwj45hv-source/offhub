@@ -1,0 +1,37 @@
+:root { --bg:#fff; --fg:#1f2328; --dim:#59636e; --line:#d1d9e0; --soft:#f6f8fa; --link:#0969da; --open:#1a7f37; --closed:#8250df; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0d1117; --fg:#e6edf3; --dim:#9198a1; --line:#3d444d; --soft:#151b23; --link:#4493f8; --open:#3fb950; --closed:#ab7df8; }
+}
+* { box-sizing: border-box; }
+body { margin: 0 auto; padding: 24px 16px 64px; max-width: 920px; background: var(--bg); color: var(--fg);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; overflow-wrap: anywhere; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 26px; line-height: 1.25; margin: 12px 0 8px; }
+.num { color: var(--dim); font-weight: 400; font-size: .75em; white-space: nowrap; }
+.facts, .by { color: var(--dim); font-size: 13px; }
+.state, .tag, .label { display: inline-block; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; }
+.state { color: #fff; border-color: transparent; background: var(--closed); }
+.state.open { background: var(--open); }
+.tag.ok { border-color: var(--open); color: var(--open); }
+.note { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); }
+.c { border: 1px solid var(--line); border-radius: 6px; margin: 16px 0; }
+.c > header { padding: 8px 12px; background: var(--soft); border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; font-size: 13px; }
+.md { padding: 4px 12px; }
+.replies { margin: 0 12px 12px 28px; }
+.thread { margin: 12px; border: 1px solid var(--line); border-radius: 6px; }
+.thread .path { padding: 6px 12px; font: 12px ui-monospace, Consolas, monospace; background: var(--soft); }
+.thread .by { padding: 6px 12px 0; }
+.thread pre { margin: 0; border-radius: 0; }
+img, video { max-width: 100%; height: auto; }
+pre { padding: 12px; overflow: auto; background: var(--soft); border-radius: 6px; font: 13px/1.45 ui-monospace, Consolas, monospace; }
+code { font: 13px ui-monospace, Consolas, monospace; background: var(--soft); padding: 1px 4px; border-radius: 4px; }
+pre code { padding: 0; background: none; }
+blockquote { margin: 0 0 12px; padding: 0 12px; color: var(--dim); border-left: 3px solid var(--line); }
+table { border-collapse: collapse; display: block; overflow: auto; }
+td, th { border: 1px solid var(--line); padding: 4px 10px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 8px; }
+.filters input[type=search] { flex: 1 1 260px; }
+.filters input[type=search], .filters select { padding: 6px 10px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+#list { list-style: none; margin: 0; padding: 0; }
+#list li { padding: 10px 4px; border-top: 1px solid var(--line); }
