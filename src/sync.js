@@ -6,7 +6,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchKind, KIND_NAMES } from './github.js';
-import { plainText, renderItem } from './render.js';
+import { esc, plainText, renderItem } from './render.js';
 
 const STATIC = fileURLToPath(new URL('./static', import.meta.url));
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/avif': 'avif', 'image/svg+xml': 'svg' };
@@ -72,7 +72,7 @@ export function build(out, repo) {
     for (const f of readdirSync(data)) {
       const it = JSON.parse(readFileSync(join(data, f), 'utf8'));
       writeFileSync(join(pages, `${it.number}.html`), renderItem(it, repo));
-      items.push({ k: kind, n: it.number, t: it.title, s: it.state, a: it.author, u: it.updatedAt, l: it.labels.map(l => l.name), c: it.comments.length });
+      items.push({ k: kind, n: it.number, t: it.title, s: it.state, a: it.author, u: it.updatedAt, l: it.labels.map(l => l.name), c: it.comments.length, r: it.meta?.tag });
       text[`${kind}/${it.number}`] = plainText(it);
     }
   }
@@ -82,6 +82,31 @@ export function build(out, repo) {
   writeFileSync(join(out, 'fulltext.js'), `window.OFFHUB_TEXT=${JSON.stringify(text)};\n`);
   cpSync(STATIC, out, { recursive: true });
   return items.length;
+}
+
+// Start page for a folder that holds several archives as <owner>/<repo>/.
+// It lists whatever is on disk, so partial runs never drop older archives.
+export function buildRoot(root) {
+  const rows = [];
+  const dirs = d => readdirSync(d, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name);
+  for (const owner of dirs(root)) {
+    for (const repo of dirs(join(root, owner))) {
+      const file = join(root, owner, repo, 'index-data.js');
+      if (!existsSync(file)) continue;
+      const d = JSON.parse(readFileSync(file, 'utf8').replace(/^window\.OFFHUB=|;\s*$/g, ''));
+      rows.push(`<li><a href="${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/index.html">${esc(d.repo)}</a>
+<div class="facts">${d.items.length} items · archived ${esc(d.generated.slice(0, 10))}</div></li>`);
+    }
+  }
+  cpSync(join(STATIC, 'style.css'), join(root, 'style.css'));
+  writeFileSync(join(root, 'index.html'), `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Offline archives</title><link rel="stylesheet" href="style.css"></head><body>
+<h1>Offline archives</h1><p class="facts">${rows.length} repositories</p>
+<ul id="list">${rows.join('\n')}</ul>
+</body></html>
+`);
+  return rows.length;
 }
 
 export async function sync({ owner, name, out, gql, limit, images = true, fetchImpl = fetch, log = console.log }) {

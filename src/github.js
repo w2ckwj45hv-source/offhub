@@ -40,33 +40,40 @@ export function makeGql(token, { fetchImpl = fetch, log = console.error } = {}) 
 
 const C = 'author{login} createdAt bodyHTML url';
 const PAGE = 'pageInfo{hasNextPage endCursor}';
+const THREAD = 'number title bodyHTML labels(first:30){nodes{name color}}';
 const KINDS = {
   issues: {
-    field: 'issues', type: 'Issue', page: 50,
+    field: 'issues', type: 'Issue', page: 50, order: 'UPDATED_AT',
     comment: C,
-    fields: 'state closedAt',
+    fields: `${THREAD} state closedAt`,
   },
   pulls: {
-    field: 'pullRequests', type: 'PullRequest', page: 20,
+    field: 'pullRequests', type: 'PullRequest', page: 20, order: 'UPDATED_AT',
     comment: C,
-    fields: `state closedAt mergedAt isDraft baseRefName headRefName additions deletions changedFiles
+    fields: `${THREAD} state closedAt mergedAt isDraft baseRefName headRefName additions deletions changedFiles
       reviews(first:50){totalCount nodes{${C} state comments(first:30){totalCount nodes{${C} path diffHunk}}}}`,
   },
   discussions: {
-    field: 'discussions', type: 'Discussion', page: 30,
+    field: 'discussions', type: 'Discussion', page: 30, order: 'UPDATED_AT',
     comment: `${C} isAnswer replies(first:50){totalCount nodes{${C}}}`,
-    fields: 'closed closedAt category{name}',
+    fields: `${THREAD} closed closedAt category{name}`,
+  },
+  // Releases cannot be listed by update time, so every run fetches all of them.
+  releases: {
+    field: 'releases', type: 'Release', page: 50, order: 'CREATED_AT',
+    comment: null,
+    fields: `number: databaseId title: name tagName bodyHTML: descriptionHTML isDraft isPrerelease publishedAt
+      releaseAssets(first:100){totalCount nodes{name size downloadUrl}}`,
   },
 };
 export const KIND_NAMES = Object.keys(KINDS);
 
 const listQuery = k => `query($owner:String!,$name:String!,$n:Int!,$after:String){
   repository(owner:$owner,name:$name){
-    ${k.field}(first:$n,after:$after,orderBy:{field:UPDATED_AT,direction:DESC}){
+    ${k.field}(first:$n,after:$after,orderBy:{field:${k.order},direction:DESC}){
       ${PAGE}
-      nodes{ id number title url createdAt updatedAt bodyHTML author{login}
-        labels(first:30){nodes{name color}}
-        comments(first:100){${PAGE} nodes{${k.comment}}}
+      nodes{ id url createdAt updatedAt author{login}
+        ${k.comment ? `comments(first:100){${PAGE} nodes{${k.comment}}}` : ''}
         ${k.fields} }
     }
   }
@@ -81,7 +88,7 @@ const entry = c => ({ author: who(c), createdAt: c.createdAt, html: c.bodyHTML, 
 // One common shape for issues, pull requests and discussions.
 export function normalize(kind, n) {
   let truncated = false;
-  const comments = n.comments.nodes.filter(Boolean).map(c => {
+  const comments = (n.comments?.nodes ?? []).filter(Boolean).map(c => {
     const out = entry(c);
     if (c.isAnswer) out.answer = true;
     if (c.replies) {
@@ -112,13 +119,41 @@ export function normalize(kind, n) {
     changedFiles: n.changedFiles, draft: n.isDraft, mergedAt: n.mergedAt,
   });
   if (n.category) meta.category = n.category.name;
+  let state = n.state ?? (n.closed ? 'CLOSED' : 'OPEN');
+  if (kind === 'releases') {
+    state = n.isDraft ? 'DRAFT' : n.isPrerelease ? 'PRERELEASE' : 'RELEASED';
+    truncated ||= n.releaseAssets.totalCount > n.releaseAssets.nodes.length;
+    Object.assign(meta, {
+      tag: n.tagName, publishedAt: n.publishedAt,
+      assets: n.releaseAssets.nodes.map(a => ({ name: a.name, size: a.size, url: a.downloadUrl })),
+    });
+  }
   return {
-    kind, number: n.number, title: n.title, url: n.url,
-    state: n.state ?? (n.closed ? 'CLOSED' : 'OPEN'),
+    kind, number: n.number, title: n.title || n.tagName, url: n.url, state,
     author: who(n), createdAt: n.createdAt, updatedAt: n.updatedAt, closedAt: n.closedAt ?? null,
-    labels: n.labels.nodes.map(l => ({ name: l.name, color: l.color })),
+    labels: (n.labels?.nodes ?? []).map(l => ({ name: l.name, color: l.color })),
     html: n.bodyHTML, comments, truncated, meta,
   };
+}
+
+// Names of all repositories an account owns, forks left out.
+export async function listRepos(gql, owner) {
+  const query = `query($owner:String!,$after:String){
+    repositoryOwner(login:$owner){
+      repositories(first:100,after:$after,ownerAffiliations:OWNER,orderBy:{field:NAME,direction:ASC}){
+        ${PAGE} nodes{name isFork}
+      }
+    }
+  }`;
+  const names = [];
+  for (let after = null; ;) {
+    const data = await gql(query, { owner, after });
+    if (!data.repositoryOwner) throw new Error(`GitHub user or organization "${owner}" not found.`);
+    const conn = data.repositoryOwner.repositories;
+    names.push(...conn.nodes.filter(r => r && !r.isFork).map(r => r.name));
+    if (!conn.pageInfo.hasNextPage) return names;
+    after = conn.pageInfo.endCursor;
+  }
 }
 
 // Yields normalized items, newest-updated first. Stops at `since` (an
@@ -132,9 +167,9 @@ export async function* fetchKind(gql, owner, name, kind, { since, limit = Infini
     const conn = data.repository[k.field];
     for (const node of conn.nodes) {
       if (!node) continue;
-      if (since && node.updatedAt < since) return;
-      let page = node.comments.pageInfo;
-      while (page.hasNextPage) {
+      if (since && k.order === 'UPDATED_AT' && node.updatedAt < since) return;
+      let page = node.comments?.pageInfo;
+      while (page?.hasNextPage) {
         const more = (await gql(moreCommentsQuery(k), { id: node.id, after: page.endCursor })).node.comments;
         node.comments.nodes.push(...more.nodes);
         page = more.pageInfo;

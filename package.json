@@ -1,7 +1,7 @@
 {
   "name": "offhub",
-  "version": "0.1.0",
-  "description": "Archive a GitHub repository's issues, pull requests and discussions as a searchable offline website.",
+  "version": "0.2.0",
+  "description": "Archive a GitHub repository's issues, pull requests, discussions and releases as a searchable offline website.",
   "type": "module",
   "bin": { "offhub": "bin/offhub.js" },
   "files": ["bin", "src"],

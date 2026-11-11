@@ -2,14 +2,15 @@
 // because pages opened from disk (file://) cannot fetch JSON.
 (() => {
   const D = window.OFFHUB, $ = id => document.getElementById(id);
-  const KIND = { issues: 'Issue', pulls: 'PR', discussions: 'Discussion' };
+  const KIND = { issues: 'Issue', pulls: 'PR', discussions: 'Discussion', releases: 'Release' };
+  const ref = i => `${KIND[i.k]} ${i.r || `#${i.n}`}`;
   const MAX = 1000;
   let text = null;
 
   document.title = `${D.repo} · offline archive`;
   $('repo').textContent = D.repo;
   $('gen').textContent = `Archived ${D.generated.slice(0, 16).replace('T', ' ')} UTC · ${D.items.length} items`;
-  for (const i of D.items) i.h = `#${i.n} ${i.t} ${i.a} ${i.l.join(' ')}`.toLowerCase();
+  for (const i of D.items) i.h = `${ref(i)} ${i.t} ${i.a} ${i.l.join(' ')}`.toLowerCase();
 
   const el = (tag, cls, txt) => {
     const e = document.createElement(tag);
@@ -23,7 +24,7 @@
     li.append(el('span', `state ${i.s.toLowerCase()}`, i.s.toLowerCase()), ' ');
     const a = el('a', '', i.t);
     a.href = `${i.k}/${i.n}.html`;
-    li.append(a, ' ', el('span', 'num', `${KIND[i.k]} #${i.n}`));
+    li.append(a, ' ', el('span', 'num', ref(i)));
     for (const l of i.l) li.append(' ', el('span', 'label', l));
     li.append(el('div', 'facts', `${i.a} · updated ${i.u.slice(0, 10)} · ${i.c} comments`));
     return li;
@@ -34,7 +35,7 @@
     const kind = $('kind').value, state = $('state').value;
     const hits = D.items.filter(i =>
       (!kind || i.k === kind)
-      && (!state || (state === 'open') === (i.s === 'OPEN'))
+      && (!state || (state === 'open' ? i.s === 'OPEN' : i.s === 'CLOSED' || i.s === 'MERGED'))
       && words.every(w => i.h.includes(w) || (text && (text[`${i.k}/${i.n}`] || '').includes(w))));
     $('count').textContent = hits.length > MAX
       ? `${hits.length} matches, showing the ${MAX} most recently updated`

@@ -1,0 +1,33 @@
+name: offhub archive
+description: Archive issues, pull requests, discussions and releases as a searchable offline website.
+branding:
+  icon: archive
+  color: blue
+inputs:
+  repository:
+    description: What to archive. One or more <owner>/<repo> names or an <owner>, separated by spaces.
+    default: ${{ github.repository }}
+  token:
+    description: Token that can read the repositories.
+    default: ${{ github.token }}
+  out:
+    description: Output folder.
+    default: archive
+  args:
+    description: Extra offhub flags, for example "--no-git --limit 100".
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      # Inputs go through the environment, never into the script text.
+      # OFFHUB_REPO and OFFHUB_ARGS are left unquoted on purpose so several
+      # names or flags split into separate arguments.
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        OFFHUB_REPO: ${{ inputs.repository }}
+        OFFHUB_OUT: ${{ inputs.out }}
+        OFFHUB_ARGS: ${{ inputs.args }}
+      run: |
+        set -f
+        node "$GITHUB_ACTION_PATH/bin/offhub.js" $OFFHUB_REPO -o "$OFFHUB_OUT" $OFFHUB_ARGS

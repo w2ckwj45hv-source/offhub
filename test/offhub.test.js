@@ -3,9 +3,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { fetchKind, normalize } from '../src/github.js';
+import { fetchKind, listRepos, normalize } from '../src/github.js';
 import { plainText, renderItem } from '../src/render.js';
-import { allowedImage, sync } from '../src/sync.js';
+import { allowedImage, buildRoot, sync } from '../src/sync.js';
 
 const node = (number, updatedAt, extra = {}) => ({
   id: `ID${number}`, number, title: `Item ${number}`, url: `https://github.com/o/r/issues/${number}`,
@@ -20,7 +20,7 @@ function fakeGql(store, calls = []) {
   return async (query, vars) => {
     calls.push(vars);
     if (vars.id) return { node: { comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ author: null, createdAt: '2026-01-03T00:00:00Z', bodyHTML: '<p>second page</p>', url: 'u2' }] } } };
-    const field = /(issues|pullRequests|discussions)\(first/.exec(query)[1];
+    const field = /(issues|pullRequests|discussions|releases)\(first/.exec(query)[1];
     const all = store[field] ?? [];
     const start = Number(vars.after ?? 0), end = start + 2;
     return { repository: { [field]: { pageInfo: { hasNextPage: end < all.length, endCursor: String(end) }, nodes: all.slice(start, end) } } };
@@ -72,6 +72,45 @@ test('renderItem escapes everything that is not a GitHub-rendered body', () => {
   assert.ok(html.includes('a&quot;b') && html.includes('&lt;b&gt;x') && html.includes('o/&lt;r&gt;'));
   assert.ok(!html.includes('red;}')); // invalid label colour is dropped
   assert.ok(html.includes('<p>body 1</p>'));
+});
+
+const release = (number, extra = {}) => ({
+  id: `R${number}`, number, title: null, tagName: `v${number}.0`, url: 'https://github.com/o/r/releases/tag/v1',
+  createdAt: `2026-0${number}-01T00:00:00Z`, updatedAt: `2026-0${number}-01T00:00:00Z`, publishedAt: `2026-0${number}-02T00:00:00Z`,
+  bodyHTML: '<p>notes</p>', author: null, isDraft: false, isPrerelease: false,
+  releaseAssets: { totalCount: 1, nodes: [{ name: 'tool<1>.zip', size: 3 * 1048576, downloadUrl: 'https://github.com/o/r/releases/download/v1/tool.zip' }] },
+  ...extra,
+});
+
+test('releases use the tag as title, list their files and ignore the since marker', async () => {
+  const store = { releases: [release(2, { isPrerelease: true }), release(1)] };
+  const items = await collect(fetchKind(fakeGql(store), 'o', 'r', 'releases', { since: '2026-09-01T00:00:00Z' }));
+  assert.deepEqual(items.map(i => `${i.title}/${i.state}`), ['v2.0/PRERELEASE', 'v1.0/RELEASED']);
+  const html = renderItem(items[1], 'o/r');
+  assert.ok(html.includes('Release v1.0') && html.includes('tool&lt;1&gt;.zip') && html.includes('3.0 MB'));
+  assert.ok(html.includes('published this on 2026-01-02'));
+});
+
+test('listRepos pages through an account and leaves forks out', async () => {
+  const pages = [
+    { pageInfo: { hasNextPage: true, endCursor: 'x' }, nodes: [{ name: 'a', isFork: false }, { name: 'fork', isFork: true }] },
+    { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ name: 'b', isFork: false }] },
+  ];
+  assert.deepEqual(await listRepos(async (q, v) => ({ repositoryOwner: { repositories: pages[v.after ? 1 : 0] } }), 'o'), ['a', 'b']);
+  await assert.rejects(listRepos(async () => ({ repositoryOwner: null }), 'nobody'), /not found/);
+});
+
+test('buildRoot lists every archive found on disk', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'offhub-root-'));
+  try {
+    const store = { issues: [node(1, '2026-01-01T00:00:00Z')] };
+    for (const name of ['one', 'two']) await sync({ owner: 'o', name, out: join(root, 'o', name), gql: fakeGql(store), images: false, log: () => {} });
+    assert.equal(buildRoot(root), 2);
+    const html = readFileSync(join(root, 'index.html'), 'utf8');
+    assert.ok(html.includes('href="o/one/index.html"') && html.includes('href="o/two/index.html"') && html.includes('1 items'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('plainText strips tags and lowercases', () => {
